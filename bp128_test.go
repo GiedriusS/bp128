@@ -1,15 +1,19 @@
 package bp128
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
+	"path"
 	"reflect"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type intSlice reflect.Value
@@ -255,4 +259,53 @@ func TestDeltaPackedIntsEncDec(t *testing.T) {
 	var out []uint32
 	Unpack(packed2, &out)
 	assert.Equal(t, data, out)
+}
+
+func writeSliceToFile(t *testing.T, numbers []uint32, fileName string) {
+	f, err := os.Create(fileName)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	writer := bufio.NewWriter(f)
+
+	for _, n := range numbers {
+		_, err := fmt.Fprintln(writer, n)
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Flush())
+}
+
+func FuzzAgainstRealImplementation(f *testing.F) {
+	f.Add(uint32(1), int(1))
+
+	f.Fuzz(func(t *testing.T, numbersCount uint32, seed int) {
+		s := rand.NewSource(int64(seed))
+		r := rand.New(s)
+
+		numbersUniq := map[uint32]struct{}{}
+		numbers := make([]uint32, 0, numbersCount)
+		for len(numbersUniq) < int(numbersCount) {
+			n := r.Uint32()
+			_, ok := numbersUniq[n]
+			if ok {
+				continue
+			}
+			numbersUniq[n] = struct{}{}
+			numbers = append(numbers, n)
+		}
+		sort.Slice(numbers, func(i, j int) bool {
+			return numbers[i] < numbers[j]
+		})
+		td := t.TempDir()
+		dataIn := path.Join(td, "datain")
+		retFile := path.Join(td, "ret.bin")
+
+		writeSliceToFile(t, numbers, dataIn)
+
+		cmd := exec.Command("./originalimplementation", dataIn, retFile)
+		require.NoError(t, cmd.Run())
+
+		c, err := os.ReadFile(retFile)
+		require.NoError(t, err)
+		t.Fatal("Got", len(c), "data back", numbers)
+	})
 }

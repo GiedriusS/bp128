@@ -48,3 +48,12 @@ BenchmarkUnPack64            1596 mis
 BenchmarkDeltaPack64          577 mis
 BenchmarkDeltaUnPack64       2265 mis
 ```
+
+
+## Fork changes
+
+
+TODO:
+- Fuzz tests against the original implementation
+- Scalar implementation
+- Writers/readers for Prometheus
